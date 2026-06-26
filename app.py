@@ -5,7 +5,7 @@ import time
 import pandas as pd
 from pathlib import Path
 
-os.environ["GROQ_API_KEY"] = "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"
+os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
 
 from agents.domain_llm import DomainLLM
 from pipelines.chain_pipeline import ChainPipeline
