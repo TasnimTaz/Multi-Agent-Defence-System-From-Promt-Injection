@@ -6,7 +6,7 @@ from groq import Groq
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 GROQ_CLIENT = Groq(api_key=GROQ_API_KEY)
-MODEL_NAME = "llama-3.3-70b-versatile"
+MODEL_NAME = "llama-3.1-8b-instant"
 
 SAFE_REFUSAL_MSG = (
     "I'm sorry, I cannot process this request as it appears "
