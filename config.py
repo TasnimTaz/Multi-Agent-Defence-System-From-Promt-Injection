@@ -6,7 +6,15 @@ from groq import Groq
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
 GROQ_CLIENT = Groq(api_key=GROQ_API_KEY)
-MODEL_NAME = "llama-3.1-8b-instant"
+
+# ==========================================
+# MODEL CONFIGURATION (Cross-Model Setup)
+# ==========================================
+# Target / Domain LLM (যেরকম পেপারে Llama2 ছিল, এখানে Llama 3.1)
+TARGET_MODEL = "llama-3.1-8b-instant"
+
+# Defense / Guard & Coordinator LLM (যেরকম পেপারে ChatGLM ছিল, এখানে Gemma 2)
+DEFENSE_MODEL = "qwen/qwen3.6-27b"
 
 SAFE_REFUSAL_MSG = (
     "I'm sorry, I cannot process this request as it appears "

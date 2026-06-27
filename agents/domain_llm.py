@@ -1,6 +1,7 @@
 # agents/domain_llm.py
 
-from config import MODEL_NAME, SYSTEM_PROMPT, GROQ_CLIENT
+# config থেকে MODEL_NAME এর বদলে TARGET_MODEL ইম্পোর্ট করা হয়েছে
+from config import TARGET_MODEL, SYSTEM_PROMPT, GROQ_CLIENT
 
 
 class DomainLLM:
@@ -11,7 +12,8 @@ class DomainLLM:
 
     def __init__(self):
         self.client = GROQ_CLIENT
-        self.model = MODEL_NAME
+        # এখানে TARGET_MODEL (Llama 3.1) সেট করা হলো
+        self.model = TARGET_MODEL
         self.system_prompt = SYSTEM_PROMPT
         print(f"[DomainLLM] Ready via Groq — model: {self.model}")
 

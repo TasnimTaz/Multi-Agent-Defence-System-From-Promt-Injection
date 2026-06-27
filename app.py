@@ -11,6 +11,7 @@ from agents.domain_llm import DomainLLM
 from pipelines.chain_pipeline import ChainPipeline
 from pipelines.coordinator_pipeline import CoordinatorPipeline
 from evaluation.attack_dataset import ATTACK_DATASET, ALL_ATTACKS
+from config import TARGET_MODEL, DEFENSE_MODEL
 
 st.set_page_config(
     page_title="Multi-Agent LLM Defense Pipeline (Groq)",
@@ -343,8 +344,14 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.markdown("**Model (Groq Cloud)**")
-    st.code("llama-3.3-70b-versatile", language=None)
+    st.markdown("### 🤖 System Architecture")
+
+    st.markdown("**Target LLM (Under Test):**")
+    st.code(TARGET_MODEL, language=None)
+
+    st.markdown("**Defense LLM (Guard & Coordinator):**")
+    st.code(DEFENSE_MODEL, language=None)
+    st.markdown("---")
 
     st.markdown("**Paper**")
     st.markdown(

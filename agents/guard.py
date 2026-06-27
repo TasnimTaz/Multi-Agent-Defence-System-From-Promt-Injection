@@ -1,7 +1,8 @@
 # agents/guard.py
 
 import json
-from config import MODEL_NAME, GUARD_SYSTEM_PROMPT, SAFE_REFUSAL_MSG, GROQ_CLIENT
+# config থেকে DEFENSE_MODEL ইম্পোর্ট করা হয়েছে
+from config import DEFENSE_MODEL, GUARD_SYSTEM_PROMPT, SAFE_REFUSAL_MSG, GROQ_CLIENT
 
 
 class GuardAgent:
@@ -12,9 +13,9 @@ class GuardAgent:
 
     def __init__(self):
         self.client = GROQ_CLIENT
-        self.model = MODEL_NAME
+        self.model = DEFENSE_MODEL
         self.system_prompt = GUARD_SYSTEM_PROMPT
-        print("[GuardAgent] Ready via Groq")
+        print(f"[GuardAgent] Ready via Groq using {self.model}")
 
     def get_refusal(self) -> str:
         return SAFE_REFUSAL_MSG
@@ -31,10 +32,14 @@ class GuardAgent:
                     {"role": "user",   "content": f"Validate this AI response:\n\n{response_text}"},
                 ],
                 temperature=0.1,
-                max_completion_tokens=1024,
+                max_completion_tokens=4096,  # 🛠️ টোকেন বাড়িয়ে দেওয়া হলো রিজনিং এর জন্য
                 stream=False
             )
             raw = completion.choices[0].message.content.strip()
+
+            # 🛠️ ট্রিক ১: রিজনিং মডেলের <think>...</think> ট্যাগ থাকলে তা বাদ দেওয়া
+            if "</think>" in raw:
+                raw = raw.split("</think>")[-1].strip()
 
             # Strip markdown fences
             if raw.startswith("```"):
@@ -52,4 +57,5 @@ class GuardAgent:
 
         except (json.JSONDecodeError, KeyError, Exception) as e:
             # Fail-safe: if guard fails, block the output
+            # 🛠️ সিনট্যাক্স এররটি ফিক্স করা হলো (কমা ও ব্র্যাকেট ক্লোজিং)
             return False, "", f"Guard error/fail-safe: {str(e)}"
