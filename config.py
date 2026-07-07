@@ -14,7 +14,7 @@ GROQ_CLIENT = Groq(api_key=GROQ_API_KEY)
 TARGET_MODEL = "llama-3.1-8b-instant"
 
 # Defense / Guard & Coordinator LLM
-DEFENSE_MODEL = "llama-3.3-70b-versatile"
+DEFENSE_MODEL = "qwen/qwen3-32b"
 
 SAFE_REFUSAL_MSG = (
     "I'm sorry, I cannot process this request as it appears "
