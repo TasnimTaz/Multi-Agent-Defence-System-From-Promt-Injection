@@ -11,6 +11,7 @@ from agents.domain_llm import DomainLLM
 from pipelines.chain_pipeline import ChainPipeline
 from pipelines.coordinator_pipeline import CoordinatorPipeline
 from pipelines.macd_pipeline import MACDPipeline
+from pipelines.macd_pipeline_v2 import MACDPipelineV2
 from evaluation.attack_dataset import ATTACK_DATASET, ALL_ATTACKS
 from config import TARGET_MODEL, DEFENSE_MODEL
 
@@ -322,9 +323,19 @@ def init_pipelines():
     chain_pipe = ChainPipeline(llm)
     coord_pipe = CoordinatorPipeline(llm)
     macd_pipe = MACDPipeline(llm)
-    return chain_pipe, coord_pipe, macd_pipe
+    macd_v2_pipe = MACDPipelineV2(llm)
+    return chain_pipe, coord_pipe, macd_pipe, macd_v2_pipe
 
-chain_pipeline, coordinator_pipeline, macd_pipeline = init_pipelines()
+chain_pipeline, coordinator_pipeline, macd_pipeline, macd_v2_pipeline = init_pipelines()
+
+# একই রেজিস্ট্রি Interactive আর Evaluate — দুই মোডেই ব্যবহার হবে, যাতে
+# pipeline object আর তার description একবারই ডিফাইন করতে হয়।
+PIPELINE_REGISTRY = {
+    "Chain": (chain_pipeline, "User Input → Domain LLM → Guard Agent → Output"),
+    "Coordinator": (coordinator_pipeline, "User Input → Coordinator → Domain LLM → Guard → Output"),
+    "MACD": (macd_pipeline, "User Input → [Pattern + Intent + Category Experts (parallel, same model)] → Judge → Domain LLM → Guard → Output"),
+    "MACD-v2": (macd_v2_pipeline, "User Input → [Pattern (llama-3.1-8b-instant) + Intent (qwen3-32b) + Category (gpt-oss-120b) Experts, parallel] → Judge (llama-3.3-70b) → Domain LLM → Guard → Output"),
+}
 
 # ── Session State Setup ──────────────────────────────────────
 if "chat_history" not in st.session_state:
@@ -339,12 +350,31 @@ with st.sidebar:
 
     mode = st.radio(
         "Select Mode",
-        ["💬 Interactive — Chain", "💬 Interactive — Coordinator", "💬 Interactive — MACD",
-         "💬 Interactive — All Three",
+        ["💬 Interactive",
          "📊 Evaluate — Moderate/Intermediate", "📊 Evaluate — Hard/Advanced",
          "📊 Evaluate — Extreme/Coordinator-Level", "📊 Evaluate — Full (90 attacks)"],
         label_visibility="collapsed",
     )
+
+    # ── Pipeline picker (Interactive ও Evaluate — দুই মোডেই কাজ করে) ──
+    # ইচ্ছামতো ১/২/৩/৪টা পাইপলাইন একসাথে বেছে নেওয়ার জন্য checkbox —
+    # যেমন শুধু Chain+MACD, বা Coordinator+MACD-v2, বা যেকোনো কম্বিনেশন।
+    st.markdown("---")
+    st.markdown("### 🧩 Pipelines to run")
+    use_chain = st.checkbox("Chain", value=True)
+    use_coord = st.checkbox("Coordinator", value=False)
+    use_macd = st.checkbox("MACD", value=False)
+    use_macd_v2 = st.checkbox("MACD-v2", value=False)
+
+    selected_pipeline_names = []
+    if use_chain:
+        selected_pipeline_names.append("Chain")
+    if use_coord:
+        selected_pipeline_names.append("Coordinator")
+    if use_macd:
+        selected_pipeline_names.append("MACD")
+    if use_macd_v2:
+        selected_pipeline_names.append("MACD-v2")
 
     st.markdown("---")
     st.markdown("### 🤖 System Architecture")
@@ -383,28 +413,20 @@ st.markdown("""
 # ════════════════════════════════════════════════════════════
 # INTERACTIVE MODES (Chain / Coordinator / Both)
 # ════════════════════════════════════════════════════════════
-if mode in ["💬 Interactive — Chain", "💬 Interactive — Coordinator", "💬 Interactive — MACD", "💬 Interactive — All Three"]:
+if mode == "💬 Interactive":
 
-    if mode == "💬 Interactive — Chain":
-        pipeline_label = "Chain Pipeline"
-        pipeline_desc  = "User Input → Domain LLM → Guard Agent → Output"
-        pipelines = [("Chain", chain_pipeline)]
-    elif mode == "💬 Interactive — Coordinator":
-        pipeline_label = "Coordinator Pipeline"
-        pipeline_desc  = "User Input → Coordinator → Domain LLM → Guard → Output"
-        pipelines = [("Coordinator", coordinator_pipeline)]
-    elif mode == "💬 Interactive — MACD":
-        pipeline_label = "MACD Pipeline"
-        pipeline_desc  = "User Input → [Pattern + Intent + Category Experts (parallel)] → Judge → Domain LLM → Guard → Output"
-        pipelines = [("MACD", macd_pipeline)]
-    else:
-        pipeline_label = "All Three Pipelines"
-        pipeline_desc  = "Runs Chain, Coordinator and MACD in parallel for comparison"
-        pipelines = [("Chain", chain_pipeline), ("Coordinator", coordinator_pipeline), ("MACD", macd_pipeline)]
+    # Sidebar checkbox অনুযায়ী যত পাইপলাইন সিলেক্ট করা হয়েছে, ঠিক ততগুলোই রান হবে
+    pipelines = [(name, PIPELINE_REGISTRY[name][0]) for name in selected_pipeline_names]
+
+    if not pipelines:
+        st.warning("⚠️ সাইডবার থেকে অন্তত একটা পাইপলাইন সিলেক্ট করো (Chain / Coordinator / MACD / MACD-v2)।")
+        st.stop()
 
     col_info, _ = st.columns([3, 1])
     with col_info:
-        st.markdown(f"**{pipeline_label}** — `{pipeline_desc}`")
+        st.markdown(f"**Running {len(pipelines)} pipeline(s):** " + ", ".join(f"`{n}`" for n, _ in pipelines))
+        for n, _ in pipelines:
+            st.markdown(f"- **{n}** — `{PIPELINE_REGISTRY[n][1]}`")
 
     # Render Chat History
     for msg in st.session_state.chat_history:
@@ -487,83 +509,64 @@ else:
 
     st.markdown(
         f"**Suite:** `{suite_name}` — **attacks {start_idx}–{end_idx} selected "
-        f"({len(attacks)} / {full_count})** × 3 pipelines = **{len(attacks)*3} evaluations**"
+        f"({len(attacks)} / {full_count})** × {max(len(selected_pipeline_names), 1)} pipeline(s) "
+        f"= **{len(attacks) * max(len(selected_pipeline_names), 1)} evaluations**"
     )
+    if selected_pipeline_names:
+        st.markdown("**Pipelines selected:** " + ", ".join(f"`{n}`" for n in selected_pipeline_names))
     st.markdown("---")
 
     run_btn = st.button("▶ Run Evaluation Suite", type="primary", use_container_width=True)
 
     if run_btn:
-        all_results = {"Chain": [], "Coordinator": [], "MACD": []}
+        if not selected_pipeline_names:
+            st.warning("⚠️ সাইডবার থেকে অন্তত একটা পাইপলাইন সিলেক্ট করো (Chain / Coordinator / MACD / MACD-v2)।")
+            st.stop()
+
+        eval_pipelines = [(name, PIPELINE_REGISTRY[name][0]) for name in selected_pipeline_names]
+
+        all_results = {name: [] for name, _ in eval_pipelines}
         progress = st.progress(0)
         status   = st.empty()
-        total    = len(attacks) * 3
+        total    = len(attacks) * len(eval_pipelines)
         done     = 0
 
-        col_chain, col_coord, col_macd = st.columns(3)
-        chain_container = col_chain.empty()
-        coord_container = col_coord.empty()
-        macd_container  = col_macd.empty()
-
-        chain_html = "<b>Chain Pipeline Logs</b><br>"
-        coord_html = "<b>Coordinator Pipeline Logs</b><br>"
-        macd_html  = "<b>MACD Pipeline Logs</b><br>"
+        # যতগুলো পাইপলাইন সিলেক্ট করা হয়েছে ঠিক ততগুলো কলাম/লগ-কন্টেইনার তৈরি হবে
+        columns = st.columns(len(eval_pipelines))
+        containers = {}
+        html_logs = {}
+        for (pipe_name, _), col in zip(eval_pipelines, columns):
+            containers[pipe_name] = col.empty()
+            html_logs[pipe_name] = f"<b>{pipe_name} Pipeline Logs</b><br>"
 
         for attack in attacks:
-            # 1. Run Chain Pipeline
-            status.markdown(f"`[Chain]` Testing via Groq API `{attack['id']}` — {attack['category']}")
-            t0 = time.time()
-            res_chain = chain_pipeline.run(attack["input"])
-            elapsed_chain = round(time.time() - t0, 2)
-            
-            entry_chain = {**attack, "blocked": res_chain["blocked"], "stage": res_chain.get("block_stage"), "reason": res_chain.get("block_reason"), "elapsed": elapsed_chain}
-            all_results["Chain"].append(entry_chain)
-            
-            chain_reason = (res_chain.get("block_reason") or "")[:120]
-            if res_chain["blocked"]:
-                chain_html += f'<div class="result-blocked">✓ {attack["id"]} | {attack["category"]} | {elapsed_chain}s | {chain_reason}</div>'
-                print(res_chain["raw_response"])
-            else:
-                chain_html += f'<div class="result-passed">✗ {attack["id"]} | {attack["category"]} | {elapsed_chain}s</div>'
-            chain_container.markdown(chain_html, unsafe_allow_html=True)
-            done += 1
-            progress.progress(done / total)
+            for pipe_name, pipeline in eval_pipelines:
+                status.markdown(f"`[{pipe_name}]` Testing via Groq API `{attack['id']}` — {attack['category']}")
+                t0 = time.time()
+                res = pipeline.run(attack["input"])
+                elapsed = round(time.time() - t0, 2)
 
-            # 2. Run Coordinator Pipeline
-            status.markdown(f"`[Coordinator]` Testing via Groq API `{attack['id']}` — {attack['category']}")
-            t0 = time.time()
-            res_coord = coordinator_pipeline.run(attack["input"])
-            elapsed_coord = round(time.time() - t0, 2)
-            
-            entry_coord = {**attack, "blocked": res_coord["blocked"], "stage": res_coord.get("block_stage"), "reason": res_coord.get("block_reason"), "elapsed": elapsed_coord}
-            all_results["Coordinator"].append(entry_coord)
-            
-            coord_reason = (res_coord.get("block_reason") or "")[:120]
-            if res_coord["blocked"]:
-                coord_html += f'<div class="result-blocked">✓ {attack["id"]} | {attack["category"]} | {elapsed_coord}s | {coord_reason}</div>'
-            else:
-                coord_html += f'<div class="result-passed">✗ {attack["id"]} | {attack["category"]} | {elapsed_coord}s</div>'
-            coord_container.markdown(coord_html, unsafe_allow_html=True)
-            done += 1
-            progress.progress(done / total)
+                entry = {
+                    **attack,
+                    "blocked": res["blocked"],
+                    "stage": res.get("block_stage"),
+                    "reason": res.get("block_reason"),
+                    "elapsed": elapsed,
+                }
+                all_results[pipe_name].append(entry)
 
-            # 3. Run MACD Pipeline
-            status.markdown(f"`[MACD]` Testing via Groq API `{attack['id']}` — {attack['category']}")
-            t0 = time.time()
-            res_macd = macd_pipeline.run(attack["input"])
-            elapsed_macd = round(time.time() - t0, 2)
+                reason_short = (res.get("block_reason") or "")[:120]
+                if res["blocked"]:
+                    html_logs[pipe_name] += f'<div class="result-blocked">✓ {attack["id"]} | {attack["category"]} | {elapsed}s | {reason_short}</div>'
+                    if pipe_name == "Chain":
+                        print(res["raw_response"])
+                else:
+                    html_logs[pipe_name] += f'<div class="result-passed">✗ {attack["id"]} | {attack["category"]} | {elapsed}s</div>'
+                containers[pipe_name].markdown(html_logs[pipe_name], unsafe_allow_html=True)
 
-            entry_macd = {**attack, "blocked": res_macd["blocked"], "stage": res_macd.get("block_stage"), "reason": res_macd.get("block_reason"), "elapsed": elapsed_macd}
-            all_results["MACD"].append(entry_macd)
+                done += 1
+                progress.progress(done / total)
 
-            macd_reason = (res_macd.get("block_reason") or "")[:120]
-            if res_macd["blocked"]:
-                macd_html += f'<div class="result-blocked">✓ {attack["id"]} | {attack["category"]} | {elapsed_macd}s | {macd_reason}</div>'
-            else:
-                macd_html += f'<div class="result-passed">✗ {attack["id"]} | {attack["category"]} | {elapsed_macd}s</div>'
-            macd_container.markdown(macd_html, unsafe_allow_html=True)
-            done += 1
-            progress.progress(done / total)
             time.sleep(2)
 
         status.markdown("✅ **Evaluation complete via Groq Cloud API!**")

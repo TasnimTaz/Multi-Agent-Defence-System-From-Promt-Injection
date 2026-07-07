@@ -19,9 +19,9 @@ class CategoryExpertAgent:
     সরলীকৃত সংস্করণ)।
     """
 
-    def __init__(self, kb=None, top_k: int = 3):
+    def __init__(self, kb=None, top_k: int = 3, model: str = None):
         self.client = GROQ_CLIENT
-        self.model = DEFENSE_MODEL
+        self.model = model or DEFENSE_MODEL
         self.system_prompt = MACD_CATEGORY_SYSTEM_PROMPT
         self.kb = kb if kb is not None else MACD_KB
         self.top_k = top_k

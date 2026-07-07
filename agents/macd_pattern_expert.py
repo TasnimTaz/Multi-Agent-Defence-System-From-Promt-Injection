@@ -15,9 +15,9 @@ class PatternExpertAgent:
     attack signal" ডিটেক্ট করা হয় — base64/hex/zero-width/delimiter-breaking।
     """
 
-    def __init__(self):
+    def __init__(self, model: str = None):
         self.client = GROQ_CLIENT
-        self.model = DEFENSE_MODEL
+        self.model = model or DEFENSE_MODEL
         self.system_prompt = MACD_PATTERN_SYSTEM_PROMPT
         print(f"[PatternExpertAgent] Ready via Groq using {self.model}")
 

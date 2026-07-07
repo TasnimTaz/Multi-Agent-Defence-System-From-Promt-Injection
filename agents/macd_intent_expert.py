@@ -16,9 +16,9 @@ class IntentExpertAgent:
     reconnaissance।
     """
 
-    def __init__(self):
+    def __init__(self, model: str = None):
         self.client = GROQ_CLIENT
-        self.model = DEFENSE_MODEL
+        self.model = model or DEFENSE_MODEL
         self.system_prompt = MACD_INTENT_SYSTEM_PROMPT
         print(f"[IntentExpertAgent] Ready via Groq using {self.model}")
 

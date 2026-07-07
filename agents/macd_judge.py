@@ -18,9 +18,9 @@ class MACDJudgeAgent:
       (4) চূড়ান্ত is_safe + category + confidence + reason তৈরি করা
     """
 
-    def __init__(self):
+    def __init__(self, model: str = None):
         self.client = GROQ_CLIENT
-        self.model = DEFENSE_MODEL
+        self.model = model or DEFENSE_MODEL
         self.system_prompt = MACD_JUDGE_SYSTEM_PROMPT
         print(f"[MACDJudgeAgent] Ready via Groq using {self.model}")
 

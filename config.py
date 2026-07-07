@@ -152,3 +152,15 @@ MACD_KB = [
 ]
 
 LOG_PATH = "logs/results.jsonl"
+
+# ==========================================
+# MACD-v2: DIVERSE-MODEL ENSEMBLE CONFIG
+# ==========================================
+# MACD-v1 এর সব agent একই DEFENSE_MODEL শেয়ার করে (controlled architecture-only
+# comparison এর জন্য)। MACD-v2 তে প্রতিটা agent ইচ্ছাকৃতভাবে ভিন্ন model পায়,
+# যাতে genuinely diverse/uncorrelated detection signal পাওয়া যায় — একই model-কে
+# চারবার জিজ্ঞেস করার বদলে সত্যিকারের ensemble তৈরি হয়।
+MACD_V2_PATTERN_MODEL  = "llama-3.1-8b-instant"              # ছোট, দ্রুত syntax-level check
+MACD_V2_INTENT_MODEL   = "qwen/qwen3-32b"                    # reasoning model, intent বোঝায় ভালো
+MACD_V2_CATEGORY_MODEL = "openai/gpt-oss-120b"               # ভিন্ন training lineage, taxonomy matching
+MACD_V2_JUDGE_MODEL    = "openai/gpt-oss-20b"                # DEFENSE_MODEL থেকে সম্পূর্ণ আলাদা, নিজস্ব সিদ্ধান্তের জন্য
