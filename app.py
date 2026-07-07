@@ -335,11 +335,15 @@ with st.sidebar:
     st.markdown("### 🛡️ Defense Pipeline")
     st.markdown("---")
 
+    adaptive_suite_label = "📊 Evaluate — Adaptive Exact (NAACL'25)"
+    adaptive_fallback_label = "📊 Evaluate — Adaptive Fallback"
+    full_suite_label = f"📊 Evaluate — Full ({len(ALL_ATTACKS)} attacks)"
+
     mode = st.radio(
         "Select Mode",
         ["💬 Interactive — Chain", "💬 Interactive — Coordinator", "💬 Interactive — Both",
          "📊 Evaluate — v1 Taxonomy", "📊 Evaluate — Phase2 Chain",
-         "📊 Evaluate — Phase2 Coordinator", "📊 Evaluate — Full (55 attacks)"],
+         "📊 Evaluate — Phase2 Coordinator", adaptive_suite_label, adaptive_fallback_label, full_suite_label],
         label_visibility="collapsed",
     )
 
@@ -365,12 +369,13 @@ with st.sidebar:
         st.rerun()
 
 # ── Header ───────────────────────────────────────────────────
-st.markdown("""
+st.markdown(f"""
 <div class="main-header">
     <h1>🛡️ Multi-Agent LLM Defense Pipeline</h1>
     <p>
         <span class="badge">arXiv:2509.14285</span>
-        <span class="badge">Groq Llama 3.3 70B</span>
+        <span class="badge">Target: {TARGET_MODEL}</span>
+        <span class="badge">Defense: {DEFENSE_MODEL}</span>
         <span class="badge">Prompt Injection Defense</span>
         Hossain et al., 2025
     </p>
@@ -461,11 +466,18 @@ else:
         "📊 Evaluate — v1 Taxonomy":          ("v1_taxonomy",          ATTACK_DATASET["v1_taxonomy"]),
         "📊 Evaluate — Phase2 Chain":          ("phase2_chain",         ATTACK_DATASET["phase2_chain"]),
         "📊 Evaluate — Phase2 Coordinator":    ("phase2_coordinator",   ATTACK_DATASET["phase2_coordinator"]),
-        "📊 Evaluate — Full (55 attacks)":     ("full",                 ALL_ATTACKS),
+        adaptive_suite_label:                  ("adaptive_naacl25",      ATTACK_DATASET["adaptive_naacl25"]),
+        adaptive_fallback_label:               ("adaptive_naacl25_fallback", ATTACK_DATASET["adaptive_naacl25_fallback"]),
+        full_suite_label:                      ("full",                  ALL_ATTACKS),
     }
     suite_name, attacks = suite_map[mode]
 
     st.markdown(f"**Suite:** `{suite_name}` — **{len(attacks)} attacks** × 2 pipelines = **{len(attacks)*2} evaluations**")
+    if suite_name == "adaptive_naacl25" and len(attacks) == 0:
+        st.error(
+            "No generated AdaptiveAttackAgent outputs found. Run: "
+            "python evaluation/generate_adaptive_attacks.py --repo-path ../AdaptiveAttackAgent_tmp --model <model_path_or_name>"
+        )
     st.markdown("---")
 
     run_btn = st.button("▶ Run Evaluation Suite", type="primary", use_container_width=True)
