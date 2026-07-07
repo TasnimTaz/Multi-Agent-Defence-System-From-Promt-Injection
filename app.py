@@ -10,6 +10,7 @@ os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
 from agents.domain_llm import DomainLLM
 from pipelines.chain_pipeline import ChainPipeline
 from pipelines.coordinator_pipeline import CoordinatorPipeline
+from pipelines.macd_pipeline import MACDPipeline
 from evaluation.attack_dataset import ATTACK_DATASET, ALL_ATTACKS
 from config import TARGET_MODEL, DEFENSE_MODEL
 
@@ -320,9 +321,10 @@ def init_pipelines():
     llm = DomainLLM()
     chain_pipe = ChainPipeline(llm)
     coord_pipe = CoordinatorPipeline(llm)
-    return chain_pipe, coord_pipe
+    macd_pipe = MACDPipeline(llm)
+    return chain_pipe, coord_pipe, macd_pipe
 
-chain_pipeline, coordinator_pipeline = init_pipelines()
+chain_pipeline, coordinator_pipeline, macd_pipeline = init_pipelines()
 
 # ── Session State Setup ──────────────────────────────────────
 if "chat_history" not in st.session_state:
@@ -337,9 +339,10 @@ with st.sidebar:
 
     mode = st.radio(
         "Select Mode",
-        ["💬 Interactive — Chain", "💬 Interactive — Coordinator", "💬 Interactive — Both",
-         "📊 Evaluate — v1 Taxonomy", "📊 Evaluate — Phase2 Chain",
-         "📊 Evaluate — Phase2 Coordinator", "📊 Evaluate — Full (55 attacks)"],
+        ["💬 Interactive — Chain", "💬 Interactive — Coordinator", "💬 Interactive — MACD",
+         "💬 Interactive — All Three",
+         "📊 Evaluate — Moderate/Intermediate", "📊 Evaluate — Hard/Advanced",
+         "📊 Evaluate — Extreme/Coordinator-Level", "📊 Evaluate — Full (90 attacks)"],
         label_visibility="collapsed",
     )
 
@@ -380,7 +383,7 @@ st.markdown("""
 # ════════════════════════════════════════════════════════════
 # INTERACTIVE MODES (Chain / Coordinator / Both)
 # ════════════════════════════════════════════════════════════
-if mode in ["💬 Interactive — Chain", "💬 Interactive — Coordinator", "💬 Interactive — Both"]:
+if mode in ["💬 Interactive — Chain", "💬 Interactive — Coordinator", "💬 Interactive — MACD", "💬 Interactive — All Three"]:
 
     if mode == "💬 Interactive — Chain":
         pipeline_label = "Chain Pipeline"
@@ -390,10 +393,14 @@ if mode in ["💬 Interactive — Chain", "💬 Interactive — Coordinator", "�
         pipeline_label = "Coordinator Pipeline"
         pipeline_desc  = "User Input → Coordinator → Domain LLM → Guard → Output"
         pipelines = [("Coordinator", coordinator_pipeline)]
+    elif mode == "💬 Interactive — MACD":
+        pipeline_label = "MACD Pipeline"
+        pipeline_desc  = "User Input → [Pattern + Intent + Category Experts (parallel)] → Judge → Domain LLM → Guard → Output"
+        pipelines = [("MACD", macd_pipeline)]
     else:
-        pipeline_label = "Both Pipelines"
-        pipeline_desc  = "Runs Chain and Coordinator in parallel for comparison"
-        pipelines = [("Chain", chain_pipeline), ("Coordinator", coordinator_pipeline)]
+        pipeline_label = "All Three Pipelines"
+        pipeline_desc  = "Runs Chain, Coordinator and MACD in parallel for comparison"
+        pipelines = [("Chain", chain_pipeline), ("Coordinator", coordinator_pipeline), ("MACD", macd_pipeline)]
 
     col_info, _ = st.columns([3, 1])
     with col_info:
@@ -458,31 +465,49 @@ if mode in ["💬 Interactive — Chain", "💬 Interactive — Coordinator", "�
 # ════════════════════════════════════════════════════════════
 else:
     suite_map = {
-        "📊 Evaluate — v1 Taxonomy":          ("v1_taxonomy",          ATTACK_DATASET["v1_taxonomy"]),
-        "📊 Evaluate — Phase2 Chain":          ("phase2_chain",         ATTACK_DATASET["phase2_chain"]),
-        "📊 Evaluate — Phase2 Coordinator":    ("phase2_coordinator",   ATTACK_DATASET["phase2_coordinator"]),
-        "📊 Evaluate — Full (55 attacks)":     ("full",                 ALL_ATTACKS),
+        "📊 Evaluate — Moderate/Intermediate":     ("moderate_intermediate", ATTACK_DATASET["moderate_intermediate"]),
+        "📊 Evaluate — Hard/Advanced":              ("hard_advanced",         ATTACK_DATASET["hard_advanced"]),
+        "📊 Evaluate — Extreme/Coordinator-Level":  ("extreme_coordinator",   ATTACK_DATASET["extreme_coordinator"]),
+        "📊 Evaluate — Full (90 attacks)":          ("full",                  ALL_ATTACKS),
     }
     suite_name, attacks = suite_map[mode]
+    full_count = len(attacks)
 
-    st.markdown(f"**Suite:** `{suite_name}` — **{len(attacks)} attacks** × 2 pipelines = **{len(attacks)*2} evaluations**")
+    st.markdown("**Select attack range to test (start – end index)**")
+    default_end = min(5, full_count)
+    start_idx, end_idx = st.slider(
+        "Attack range",
+        min_value=0,
+        max_value=full_count,
+        value=(0, default_end),
+        step=1,
+        label_visibility="collapsed",
+    )
+    attacks = attacks[start_idx:end_idx]
+
+    st.markdown(
+        f"**Suite:** `{suite_name}` — **attacks {start_idx}–{end_idx} selected "
+        f"({len(attacks)} / {full_count})** × 3 pipelines = **{len(attacks)*3} evaluations**"
+    )
     st.markdown("---")
 
     run_btn = st.button("▶ Run Evaluation Suite", type="primary", use_container_width=True)
 
     if run_btn:
-        all_results = {"Chain": [], "Coordinator": []}
+        all_results = {"Chain": [], "Coordinator": [], "MACD": []}
         progress = st.progress(0)
         status   = st.empty()
-        total    = len(attacks) * 2
+        total    = len(attacks) * 3
         done     = 0
 
-        col_chain, col_coord = st.columns(2)
+        col_chain, col_coord, col_macd = st.columns(3)
         chain_container = col_chain.empty()
         coord_container = col_coord.empty()
+        macd_container  = col_macd.empty()
 
         chain_html = "<b>Chain Pipeline Logs</b><br>"
         coord_html = "<b>Coordinator Pipeline Logs</b><br>"
+        macd_html  = "<b>MACD Pipeline Logs</b><br>"
 
         for attack in attacks:
             # 1. Run Chain Pipeline
@@ -494,8 +519,10 @@ else:
             entry_chain = {**attack, "blocked": res_chain["blocked"], "stage": res_chain.get("block_stage"), "reason": res_chain.get("block_reason"), "elapsed": elapsed_chain}
             all_results["Chain"].append(entry_chain)
             
+            chain_reason = (res_chain.get("block_reason") or "")[:120]
             if res_chain["blocked"]:
-                chain_html += f'<div class="result-blocked">✓ {attack["id"]} | {attack["category"]} | {elapsed_chain}s</div>'
+                chain_html += f'<div class="result-blocked">✓ {attack["id"]} | {attack["category"]} | {elapsed_chain}s | {chain_reason}</div>'
+                print(res_chain["raw_response"])
             else:
                 chain_html += f'<div class="result-passed">✗ {attack["id"]} | {attack["category"]} | {elapsed_chain}s</div>'
             chain_container.markdown(chain_html, unsafe_allow_html=True)
@@ -511,13 +538,33 @@ else:
             entry_coord = {**attack, "blocked": res_coord["blocked"], "stage": res_coord.get("block_stage"), "reason": res_coord.get("block_reason"), "elapsed": elapsed_coord}
             all_results["Coordinator"].append(entry_coord)
             
+            coord_reason = (res_coord.get("block_reason") or "")[:120]
             if res_coord["blocked"]:
-                coord_html += f'<div class="result-blocked">✓ {attack["id"]} | {attack["category"]} | {elapsed_coord}s</div>'
+                coord_html += f'<div class="result-blocked">✓ {attack["id"]} | {attack["category"]} | {elapsed_coord}s | {coord_reason}</div>'
             else:
                 coord_html += f'<div class="result-passed">✗ {attack["id"]} | {attack["category"]} | {elapsed_coord}s</div>'
             coord_container.markdown(coord_html, unsafe_allow_html=True)
             done += 1
             progress.progress(done / total)
+
+            # 3. Run MACD Pipeline
+            status.markdown(f"`[MACD]` Testing via Groq API `{attack['id']}` — {attack['category']}")
+            t0 = time.time()
+            res_macd = macd_pipeline.run(attack["input"])
+            elapsed_macd = round(time.time() - t0, 2)
+
+            entry_macd = {**attack, "blocked": res_macd["blocked"], "stage": res_macd.get("block_stage"), "reason": res_macd.get("block_reason"), "elapsed": elapsed_macd}
+            all_results["MACD"].append(entry_macd)
+
+            macd_reason = (res_macd.get("block_reason") or "")[:120]
+            if res_macd["blocked"]:
+                macd_html += f'<div class="result-blocked">✓ {attack["id"]} | {attack["category"]} | {elapsed_macd}s | {macd_reason}</div>'
+            else:
+                macd_html += f'<div class="result-passed">✗ {attack["id"]} | {attack["category"]} | {elapsed_macd}s</div>'
+            macd_container.markdown(macd_html, unsafe_allow_html=True)
+            done += 1
+            progress.progress(done / total)
+            time.sleep(2)
 
         status.markdown("✅ **Evaluation complete via Groq Cloud API!**")
         st.session_state.eval_results = all_results

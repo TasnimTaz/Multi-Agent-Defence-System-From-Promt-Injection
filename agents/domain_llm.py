@@ -1,7 +1,7 @@
 # agents/domain_llm.py
 
-# config থেকে MODEL_NAME এর বদলে TARGET_MODEL ইম্পোর্ট করা হয়েছে
 from config import TARGET_MODEL, SYSTEM_PROMPT, GROQ_CLIENT
+from agents.groq_utils import safe_completion
 
 
 class DomainLLM:
@@ -12,14 +12,14 @@ class DomainLLM:
 
     def __init__(self):
         self.client = GROQ_CLIENT
-        # এখানে TARGET_MODEL (Llama 3.1) সেট করা হলো
         self.model = TARGET_MODEL
         self.system_prompt = SYSTEM_PROMPT
         print(f"[DomainLLM] Ready via Groq — model: {self.model}")
 
     def generate(self, user_input: str) -> str:
         try:
-            completion = self.client.chat.completions.create(
+            completion = safe_completion(
+                self.client,
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.system_prompt},
