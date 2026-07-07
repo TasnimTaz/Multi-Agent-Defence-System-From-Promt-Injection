@@ -1,8 +1,8 @@
 # agents/coordinator.py
 
 import json
-# config থেকে DEFENSE_MODEL ইম্পোর্ট করা হয়েছে
 from config import DEFENSE_MODEL, COORDINATOR_SYSTEM_PROMPT, GROQ_CLIENT
+from agents.groq_utils import safe_completion
 
 
 class CoordinatorAgent:
@@ -22,19 +22,20 @@ class CoordinatorAgent:
         Returns: (is_safe, category, reason, confidence)
         """
         try:
-            completion = self.client.chat.completions.create(
+            completion = safe_completion(
+                self.client,
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user",   "content": f"Classify this input:\n\n{user_input}"},
                 ],
-                temperature=0.1,  
-                max_completion_tokens=4096, 
+                temperature=0.1,
+                max_completion_tokens=1024,
                 stream=False
             )
             raw = completion.choices[0].message.content.strip()
 
-            # 🛠️ ট্রিক ১: রিজনিং মডেলের <think>...</think> ট্যাগ থাকলে তা বাদ দেওয়া
+            # 🛠️ ট্রিক ১: রিজনিং মডেলের <think>...</think> ট্যাগ থাকলে তা বাদ দেওয়া
             if "</think>" in raw:
                 raw = raw.split("</think>")[-1].strip()
 

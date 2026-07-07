@@ -1,8 +1,8 @@
 # agents/guard.py
 
 import json
-# config থেকে DEFENSE_MODEL ইম্পোর্ট করা হয়েছে
 from config import DEFENSE_MODEL, GUARD_SYSTEM_PROMPT, SAFE_REFUSAL_MSG, GROQ_CLIENT
+from agents.groq_utils import safe_completion
 
 
 class GuardAgent:
@@ -25,19 +25,20 @@ class GuardAgent:
         Returns: (is_safe, cleaned_response, reason)
         """
         try:
-            completion = self.client.chat.completions.create(
+            completion = safe_completion(
+                self.client,
                 model=self.model,
                 messages=[
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user",   "content": f"Validate this AI response:\n\n{response_text}"},
                 ],
                 temperature=0.1,
-                max_completion_tokens=4096,  # 🛠️ টোকেন বাড়িয়ে দেওয়া হলো রিজনিং এর জন্য
+                max_completion_tokens=1024,
                 stream=False
             )
             raw = completion.choices[0].message.content.strip()
 
-            # 🛠️ ট্রিক ১: রিজনিং মডেলের <think>...</think> ট্যাগ থাকলে তা বাদ দেওয়া
+            # 🛠️ ট্রিক ১: রিজনিং মডেলের <think>...</think> ট্যাগ থাকলে তা বাদ দেওয়া
             if "</think>" in raw:
                 raw = raw.split("</think>")[-1].strip()
 
@@ -57,5 +58,4 @@ class GuardAgent:
 
         except (json.JSONDecodeError, KeyError, Exception) as e:
             # Fail-safe: if guard fails, block the output
-            # 🛠️ সিনট্যাক্স এররটি ফিক্স করা হলো (কমা ও ব্র্যাকেট ক্লোজিং)
             return False, "", f"Guard error/fail-safe: {str(e)}"
