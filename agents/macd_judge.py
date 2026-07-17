@@ -1,6 +1,5 @@
-# agents/macd_judge.py
-
 import json
+import logging
 from config import DEFENSE_MODEL, MACD_JUDGE_SYSTEM_PROMPT, GROQ_CLIENT
 from agents.groq_utils import safe_completion
 
@@ -8,14 +7,6 @@ from agents.groq_utils import safe_completion
 class MACDJudgeAgent:
     """
     MACD Agent 4 (re-mapped from MACD paper's Coordinator Agent).
-    Paper: Li et al., Sec. 4.4, Agent 4 — dedup, conflict resolution,
-    contextualization verification, gap analysis.
-
-    IPI defense-এ এই ৪ টা কাজ হয়ে দাঁড়ায়:
-      (1) তিন এজেন্টের verdict merge করা
-      (2) disagreement resolve করা (সবচেয়ে specific/high-confidence signal অনুযায়ী)
-      (3) false-positive check (legitimate কিন্তু suspicious-দেখতে input যেন block না হয়)
-      (4) চূড়ান্ত is_safe + category + confidence + reason তৈরি করা
     """
 
     def __init__(self, model: str = None):
@@ -36,9 +27,13 @@ class MACDJudgeAgent:
 
     def synthesize(self, user_input: str, pattern_verdict: dict, intent_verdict: dict, category_verdict: dict) -> tuple[bool, str, str, float]:
         """
-        Returns: (is_safe, category, reason, confidence) — same shape as CoordinatorAgent.classify
-        so MACDPipeline can plug into the same DomainLLM/GuardAgent flow.
+        Returns: (is_safe, category, reason, confidence)
         """
+        # টাইপ সেফটি নিশ্চিত করতে ডিকশনারি না হলে খালি ডিকশনারি সেট করা
+        pattern_verdict = pattern_verdict if isinstance(pattern_verdict, dict) else {}
+        intent_verdict = intent_verdict if isinstance(intent_verdict, dict) else {}
+        category_verdict = category_verdict if isinstance(category_verdict, dict) else {}
+
         verdicts_summary = (
             f"Agent 1 (Pattern/Syntax): is_suspicious={pattern_verdict.get('is_suspicious')}, "
             f"patterns={pattern_verdict.get('patterns_found')}, "
@@ -71,7 +66,10 @@ class MACDJudgeAgent:
             raw = self._clean_json(completion.choices[0].message.content.strip())
             result = json.loads(raw)
 
-            is_safe = bool(result.get("is_safe", False))
+            # স্ট্রিং বা বুলিয়ান যাই আসুক, তা সঠিকভাবে হ্যান্ডেল করা
+            is_safe_raw = result.get("is_safe", False)
+            is_safe = is_safe_raw if isinstance(is_safe_raw, bool) else str(is_safe_raw).lower() == "true"
+            
             category = result.get("category", "unknown")
             reason = result.get("reason", "")
             confidence = float(result.get("confidence", 1.0))
@@ -79,15 +77,27 @@ class MACDJudgeAgent:
             return is_safe, category, reason, confidence
 
         except (json.JSONDecodeError, KeyError, Exception) as e:
-            # Fail-safe: Judge fail করলে, কোনো এজেন্ট suspicious flag দিয়েছে কিনা দেখে block করা
-            any_flagged = (
-                pattern_verdict.get("is_suspicious")
-                or intent_verdict.get("is_malicious_intent")
-                or category_verdict.get("matches_known_attack")
-            )
+            logging.warning(f"[MACDJudgeAgent Exception Catch]: Parsing failed, falling back to strict check. Error: {e}")
+            
+            # স্ট্রিং বনাম বুলিয়ান সেফটি চেকার হেল্পার লজিক
+            def is_flagged(verdict, key):
+                val = verdict.get(key, False)
+                if isinstance(val, bool):
+                    return val
+                return str(val).lower() in ["true", "yes", "1", "suspicious", "malicious"]
+
+            # ৩টি এক্সপার্টের কড়া ও নিরাপদ মূল্যায়ন
+            p_flag = is_flagged(pattern_verdict, "is_suspicious")
+            i_flag = is_flagged(intent_verdict, "is_malicious_intent")
+            c_flag = is_flagged(category_verdict, "matches_known_attack")
+            
+            any_flagged = p_flag or i_flag or c_flag
+            
+            # সিকিউরিটি ফ্রেমওয়ার্কের নিয়ম অনুযায়ী: জাজ ফেইল করলে এবং কোনো এক্সপার্ট ফ্লাগ দিলে 
+            # সেটিকে অনিরাপদ (is_safe = False) ধরাটাই শ্রেয়।
             return (
                 not any_flagged,
                 category_verdict.get("category", "unknown") if any_flagged else "safe",
-                f"MACDJudgeAgent error/fail-safe (majority of agents): {str(e)}",
-                1.0,
+                f"MACDJudgeAgent error/fail-safe strict validation triggered: {str(e)}",
+                0.5 if any_flagged else 1.0,
             )
