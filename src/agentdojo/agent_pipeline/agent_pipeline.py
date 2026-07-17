@@ -14,7 +14,6 @@ import yaml
 from google import genai
 from pydantic import BaseModel, ConfigDict, model_validator
 from typing_extensions import Self
-
 from agentdojo.agent_pipeline.base_pipeline_element import BasePipelineElement
 from agentdojo.agent_pipeline.basic_elements import InitQuery, SystemMessage
 from agentdojo.agent_pipeline.llms.anthropic_llm import AnthropicLLM
@@ -34,6 +33,16 @@ from agentdojo.logging import Logger
 from agentdojo.models import MODEL_PROVIDERS, ModelsEnum
 from agentdojo.types import ChatMessage
 
+# NOTE: MACDPromptInjectionDetector AND MACDToolCallGuard are intentionally NOT
+# imported at module level. Both modules do a sys.path hack + import config.py,
+# which (a) creates a Groq client at import time and (b) is only needed when
+# defense == "macd_defense". Importing either eagerly here would mean *every*
+# pipeline construction (regardless of chosen defense) requires GROQ_API_KEY to
+# be set, and any failure in that chain would break unrelated experiments.
+# A previous edit re-introduced eager top-level imports of MACDToolCallGuard
+# (twice!) -- both were removed. Keep both lazy-imported inside from_config(),
+# only under the macd_defense branch below.
+
 TOOL_FILTER_PROMPT = (
     "Your task is to filter the list of tools to only include those that are relevant to the user's task."
     "Output the comma-separated list containing the names of the necessary tools."
@@ -45,6 +54,7 @@ DEFENSES = [
     "transformers_pi_detector",
     "spotlighting_with_delimiting",
     "repeat_user_prompt",
+    "macd_defense",   # ← নতুন
 ]
 """Available defenses."""
 
@@ -259,6 +269,23 @@ class AgentPipeline(BasePipelineElement):
             )
             pipeline.name = f"{llm_name}-{config.defense}"
             return pipeline
+
+        if config.defense == "macd_defense":
+            # Both imports are lazy and ONLY happen when this defense is
+            # actually selected -- see the module-level NOTE above for why.
+            from agentdojo.agent_pipeline.macd_defense import MACDPromptInjectionDetector
+            from agents.macd_tool_call_guard import MACDToolCallGuard
+
+            tools_loop = ToolsExecutionLoop([
+                MACDToolCallGuard(),                                    # Layer 2: pre-execution goal-consistency gate
+                ToolsExecutor(tool_output_formatter),
+                MACDPromptInjectionDetector(raise_on_injection=True),   # Layer 1: post-hoc tool-output detector
+                llm,
+            ])
+            pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
+            pipeline.name = f"{llm_name}-{config.defense}"
+            return pipeline
+
         if config.defense == "repeat_user_prompt":
             tools_loop = ToolsExecutionLoop([ToolsExecutor(tool_output_formatter), InitQuery(), llm])
             pipeline = cls([system_message_component, init_query_component, llm, tools_loop])

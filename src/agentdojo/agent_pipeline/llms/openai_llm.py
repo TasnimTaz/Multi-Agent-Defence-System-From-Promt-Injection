@@ -110,9 +110,20 @@ def _message_to_openai(message: ChatMessage, model_name: str) -> ChatCompletionM
 
 
 def _openai_to_tool_call(tool_call: ChatCompletionMessageToolCall) -> FunctionCall:
+    raw_args = tool_call.function.arguments
+    try:
+        parsed_args = json.loads(raw_args) if raw_args else {}
+        if not isinstance(parsed_args, dict):
+            parsed_args = {}
+    except (json.JSONDecodeError, TypeError):
+        # Some OpenAI-compatible backends (e.g. Groq) occasionally return malformed
+        # or empty `arguments` for a tool call. Fall back to an empty dict so the
+        # downstream tool executor reports a normal "invalid arguments" error
+        # instead of crashing the whole benchmark run.
+        parsed_args = {}
     return FunctionCall(
         function=tool_call.function.name,
-        args=json.loads(tool_call.function.arguments),
+        args=parsed_args,
         id=tool_call.id,
     )
 
@@ -165,14 +176,6 @@ def chat_completion_request(
 
 
 class OpenAILLM(BasePipelineElement):
-    """LLM pipeline element that uses OpenAI's API.
-
-    Args:
-        client: The OpenAI client.
-        model: The model name.
-        temperature: The temperature to use for generation.
-    """
-
     def __init__(
         self,
         client: openai.OpenAI,
@@ -184,7 +187,6 @@ class OpenAILLM(BasePipelineElement):
         self.model = model
         self.temperature = temperature
         self.reasoning_effort: ChatCompletionReasoningEffort | None = reasoning_effort
-
     def query(
         self,
         query: str,
@@ -195,10 +197,23 @@ class OpenAILLM(BasePipelineElement):
     ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
         openai_messages = [_message_to_openai(message, self.model) for message in messages]
         openai_tools = [_function_to_openai(tool) for tool in runtime.functions.values()]
-        completion = chat_completion_request(
-            self.client, self.model, openai_messages, openai_tools, self.reasoning_effort, self.temperature
-        )
-        output = _openai_to_assistant_message(completion.choices[0].message)
+        try:
+            completion = chat_completion_request(
+                self.client, self.model, openai_messages, openai_tools, self.reasoning_effort, self.temperature
+            )
+            output = _openai_to_assistant_message(completion.choices[0].message)
+        except openai.BadRequestError as e:
+            # Some OpenAI-compatible backends (e.g. Groq) occasionally emit a malformed
+            # tool-call that the API itself rejects with tool_use_failed. Instead of
+            # crashing the whole benchmark run, treat this as the model failing to
+            # produce a usable response for this step -- the task will simply be
+            # scored as unsuccessful, which is consistent with AgentDojo's normal
+            # utility scoring for model failures.
+            output = ChatAssistantMessage(
+                role="assistant",
+                content=[text_content_block_from_string(f"[LLM failed to produce a valid tool call: {e}]")],
+                tool_calls=None,
+            )
         messages = [*messages, output]
         return query, runtime, env, messages, extra_args
 
