@@ -1,4 +1,5 @@
 import contextvars
+import datetime
 import json
 import logging
 import os
@@ -150,6 +151,19 @@ class NotebookLogger(OutputLogger):
         super().log(messages, **kwargs)
 
 
+def _json_default(value):
+    if isinstance(value, BaseModel):
+        try:
+            return value.model_dump(mode="json")
+        except TypeError:
+            return value.model_dump()
+    if isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+        return value.isoformat()
+    if isinstance(value, set):
+        return sorted(value)
+    return str(value)
+
+
 class TraceLogger(Logger):
     """
     Logs agent interactions as JSON files in a directory.
@@ -253,7 +267,7 @@ class TraceLogger(Logger):
                         **other_context,
                     },
                     indent=4,
-                    default=lambda o: o.model_dump() if isinstance(o, BaseModel) else o,
+                    default=_json_default,
                 )
             )
 

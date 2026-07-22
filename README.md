@@ -41,6 +41,9 @@ python -m agentdojo.scripts.benchmark -s workspace -ut user_task_0 \
     --defense tool_filter --attack tool_knowledge
 ```
 
+The custom MACD defense also includes a four-configuration component ablation runner (baseline, Tool Guard only,
+Multi-Agent only, and dual-layer). See [the MACD ablation guide](docs/macd_ablation.md).
+
 To run the above, but on all suites and tasks, run the following:
 
 ```bash

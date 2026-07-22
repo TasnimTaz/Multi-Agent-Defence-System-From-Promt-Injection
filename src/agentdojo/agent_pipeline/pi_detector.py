@@ -100,16 +100,12 @@ class PromptInjectionDetector(BasePipelineElement):
                 (1.0 if detection_result else 0.0) if not isinstance(detection_result, tuple) else detection_result[1]
             )
             is_injection = detection_result if not isinstance(detection_result, tuple) else detection_result[0]
-            print(f"🔍 [PI_DETECTOR DEBUG] raise_on_injection={self.raise_on_injection}, is_injection={is_injection}, mode={self.mode}")
-            print(f"🧪 CHECK: raise_on_injection={self.raise_on_injection!r} is_injection={is_injection!r} -> condition={self.raise_on_injection and is_injection!r}")
             if self.raise_on_injection and is_injection:
-                print("🧪 ENTERING RAISE BLOCK NOW")
                 raise AbortAgentError(
                     f"aborting execution because a prompt injection was detected (score: {score}) in message: {text}",
                     list(messages),
                     env,
                 )
-            print("🧪 SKIPPED RAISE — condition was False")
 
             if is_injection:
                 message["content"] = self.transform(message["content"] or [])

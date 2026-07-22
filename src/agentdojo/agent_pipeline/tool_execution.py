@@ -25,7 +25,7 @@ def tool_result_to_str(
     """Basic tool output formatter with YAML dump by default. Could work with `json.dumps` as
     `dump_fn`."""
     if isinstance(tool_result, BaseModel):
-        return dump_fn(tool_result.model_dump()).strip()
+        return dump_fn(tool_result.model_dump(mode="json")).strip()
 
     if isinstance(tool_result, list):
         res_items = []
@@ -33,7 +33,7 @@ def tool_result_to_str(
             if type(item) in [str, int]:
                 res_items += [str(item)]
             elif isinstance(item, BaseModel):
-                res_items += [item.model_dump()]
+                res_items += [item.model_dump(mode="json")]
             else:
                 raise TypeError("Not valid type for item tool result: " + str(type(item)))
 

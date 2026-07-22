@@ -36,12 +36,12 @@ from agentdojo.types import ChatMessage
 # NOTE: MACDPromptInjectionDetector AND MACDToolCallGuard are intentionally NOT
 # imported at module level. Both modules do a sys.path hack + import config.py,
 # which (a) creates a Groq client at import time and (b) is only needed when
-# defense == "macd_defense". Importing either eagerly here would mean *every*
+# a MACD defense. Importing either eagerly here would mean *every*
 # pipeline construction (regardless of chosen defense) requires GROQ_API_KEY to
 # be set, and any failure in that chain would break unrelated experiments.
 # A previous edit re-introduced eager top-level imports of MACDToolCallGuard
 # (twice!) -- both were removed. Keep both lazy-imported inside from_config(),
-# only under the macd_defense branch below.
+# only under the MACD branch below.
 
 TOOL_FILTER_PROMPT = (
     "Your task is to filter the list of tools to only include those that are relevant to the user's task."
@@ -54,9 +54,20 @@ DEFENSES = [
     "transformers_pi_detector",
     "spotlighting_with_delimiting",
     "repeat_user_prompt",
+    "macd_tool_guard",
+    "macd_multi_agent",
     "macd_defense",   # ← নতুন
 ]
 """Available defenses."""
+
+# The two single-layer entries exist specifically for the 2x2 ablation study.
+# Keep ``macd_defense`` as the original public name for the complete system so
+# existing commands and cached run paths continue to work unchanged.
+MACD_DEFENSE_LAYERS = {
+    "macd_tool_guard": (True, False),
+    "macd_multi_agent": (False, True),
+    "macd_defense": (True, True),
+}
 
 
 def load_system_message(system_message_name: str | None) -> str:
@@ -270,18 +281,26 @@ class AgentPipeline(BasePipelineElement):
             pipeline.name = f"{llm_name}-{config.defense}"
             return pipeline
 
-        if config.defense == "macd_defense":
-            # Both imports are lazy and ONLY happen when this defense is
-            # actually selected -- see the module-level NOTE above for why.
-            from agentdojo.agent_pipeline.macd_defense import MACDPromptInjectionDetector
-            from agents.macd_tool_call_guard import MACDToolCallGuard
+        if config.defense in MACD_DEFENSE_LAYERS:
+            # Imports remain lazy and are narrowed to the selected layers. A
+            # guard-only ablation must not initialize the four-agent detector,
+            # and a detector-only ablation must not initialize the guard.
+            use_tool_guard, use_multi_agent = MACD_DEFENSE_LAYERS[config.defense]
+            loop_elements: list[BasePipelineElement] = []
+            if use_tool_guard:
+                from agents.macd_tool_call_guard import MACDToolCallGuard
 
-            tools_loop = ToolsExecutionLoop([
-                MACDToolCallGuard(),                                    # Layer 2: pre-execution goal-consistency gate
-                ToolsExecutor(tool_output_formatter),
-                MACDPromptInjectionDetector(raise_on_injection=True),   # Layer 1: post-hoc tool-output detector
-                llm,
-            ])
+                loop_elements.append(MACDToolCallGuard())
+
+            loop_elements.append(ToolsExecutor(tool_output_formatter))
+
+            if use_multi_agent:
+                from agentdojo.agent_pipeline.macd_defense import MACDPromptInjectionDetector
+
+                loop_elements.append(MACDPromptInjectionDetector(raise_on_injection=True))
+
+            loop_elements.append(llm)
+            tools_loop = ToolsExecutionLoop(loop_elements)
             pipeline = cls([system_message_component, init_query_component, llm, tools_loop])
             pipeline.name = f"{llm_name}-{config.defense}"
             return pipeline

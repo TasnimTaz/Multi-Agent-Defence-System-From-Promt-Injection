@@ -1,0 +1,2 @@
+configuration,label,tool_guard,multi_agent,total_attack_cases,attack_successes,attack_success_rate,asr_wilson_95_low,asr_wilson_95_high,attack_blocked_cases,attack_block_rate,utility_rate,elapsed_seconds
+baseline,Baseline,False,False,949,231,0.2434141201264489,0.21718061626051394,0.27171651820848086,718,0.7565858798735511,0.48050579557428874,11727.950512399999

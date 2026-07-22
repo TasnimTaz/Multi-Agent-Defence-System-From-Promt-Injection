@@ -174,7 +174,7 @@ LOG_PATH = "logs/results.jsonl"
 # MACD-v2: DIVERSE-MODEL ENSEMBLE CONFIG
 # ==========================================
 
-MACD_V2_PATTERN_MODEL  = "llama-3.1-8b-instant"
-MACD_V2_INTENT_MODEL   = "qwen/qwen3-32b"
-MACD_V2_CATEGORY_MODEL = "openai/gpt-oss-120b"
-MACD_V2_JUDGE_MODEL    = "openai/gpt-oss-20b"
+MACD_V2_PATTERN_MODEL = os.getenv("MACD_V2_PATTERN_MODEL", "llama-3.1-8b-instant")
+MACD_V2_INTENT_MODEL = os.getenv("MACD_V2_INTENT_MODEL", "llama-3.1-8b-instant")
+MACD_V2_CATEGORY_MODEL = os.getenv("MACD_V2_CATEGORY_MODEL", "llama-3.1-8b-instant")
+MACD_V2_JUDGE_MODEL = os.getenv("MACD_V2_JUDGE_MODEL", "llama-3.1-8b-instant")
