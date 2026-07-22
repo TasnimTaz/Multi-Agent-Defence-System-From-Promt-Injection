@@ -244,7 +244,19 @@ def evaluate_vicuna(params):
     predict_one_case = DEFENSE_METHODS[params['defense']]
     
     if params['defense'] == 'FinetunedDetector':
-        pipe = pipeline("text-classification", model="../deberta-v3-base-prompt-injection-v2")
+        # ------------------------------------------------------------------
+        # FIX: same GPU-placement fix as evaluate_finetuned_agent_llama.py --
+        # without a `device`/`device_map` argument, transformers silently
+        # loads this classifier on CPU even when a GPU is available,
+        # significantly slowing down repeated per-case inference during
+        # the MGCG-DT (FinetunedDetector) evaluation.
+        # ------------------------------------------------------------------
+        device = 0 if torch.cuda.is_available() else -1
+        pipe = pipeline(
+            "text-classification",
+            model="protectai/deberta-v3-base-prompt-injection-v2",
+            device=device,
+        )
     
     tool_dict = get_tool_dict()
     for attack in ['dh', 'ds']:
@@ -295,7 +307,4 @@ if __name__ == "__main__":
     params = parse_arguments(agent_type="prompted")
 
     evaluate_vicuna(params)
-    
-    
-    
     

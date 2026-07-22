@@ -96,9 +96,21 @@ def predict_one_case_finetuned_detector(params, item, tool_dict):
     return get_case_finetuned_detector(item, model_input, tool_response, '\n\n{"name": "'+ item['Attacker Tools'][0] + '",')
 
 def get_one_case_paraphrase_step_2(params, item, tool_dict):
-    filled_paraphrasing_prompt = LLM_PARAPHRASING_PROMPT.format(text = '<advstring> ' + item['Attacker Input'] if params['adv_string_position'] == 'prefix' else item['Attacker Input'] + ' <advstring>')
+    # ------------------------------------------------------------------
+    # FIX: 'Attacker Input' is not always present on the item dict at this
+    # stage -- the sibling function predict_one_case_paraphrasing() in
+    # evaluate_finetuned_agent_llama.py already falls back to
+    # 'Attacker Instruction' for exactly this reason, but this function was
+    # missing that fallback, causing a KeyError: 'Attacker Input' crash
+    # partway through TGCG step 2 data preparation (after step 1 training
+    # had already completed). Apply the same fallback here.
+    # ------------------------------------------------------------------
+    attacker_text = item['Attacker Input'] if 'Attacker Input' in item else item['Attacker Instruction']
+    filled_paraphrasing_prompt = LLM_PARAPHRASING_PROMPT.format(
+        text=('<advstring> ' + attacker_text) if params['adv_string_position'] == 'prefix' else (attacker_text + ' <advstring>')
+    )
     paraphrasing_model_input = llama3_template.format(user_prompt = filled_paraphrasing_prompt)
-    return get_case(item, paraphrasing_model_input, '\n\n' + item['Attacker Input'])
+    return get_case(item, paraphrasing_model_input, '\n\n' + attacker_text)
 
 DEFENSE_METHODS = {
     "Paraphrasing": get_one_case_no_defense,

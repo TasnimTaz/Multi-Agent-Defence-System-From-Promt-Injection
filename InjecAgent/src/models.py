@@ -24,7 +24,7 @@ class LlamaToolUseModel(BaseModel):
             "text-generation",
             model=params['model_name'],
             tokenizer=tokenizer,
-            model_kwargs={"torch_dtype": torch.bfloat16},
+            model_kwargs={"torch_dtype": torch.bfloat16, "offload_folder": "./offload_cache"},
             device_map="auto",
             # max_length=4096,
             max_new_tokens=512,
@@ -35,7 +35,8 @@ class LlamaToolUseModel(BaseModel):
             self.model = transformers.AutoModelForCausalLM.from_pretrained(
                 params['model_name'], 
                 torch_dtype=torch.bfloat16,
-                device_map="auto"
+                device_map="auto",
+                offload_folder="./offload_cache"
             )
             self.model.eval()
         self.params = params
@@ -62,7 +63,8 @@ class VicunaModel(BaseModel):
             self.model = transformers.AutoModelForCausalLM.from_pretrained(
                 params['model_name'], 
                 torch_dtype=torch.bfloat16,
-                device_map="auto"
+                device_map="auto",
+                offload_folder="./offload_cache"
             )
             self.model.eval()
             self.max_length = 4096  
@@ -71,7 +73,8 @@ class VicunaModel(BaseModel):
             self.model = transformers.AutoModelForCausalLM.from_pretrained(
                 params['model_name'], 
                 torch_dtype=torch.bfloat16,
-                device_map="auto"
+                device_map="auto",
+                offload_folder="./offload_cache"
             )
             self.model.eval()
             
@@ -85,6 +88,7 @@ class VicunaModel(BaseModel):
                 max_new_tokens=256,
                 truncation=True,
                 do_sample=False,
+                model_kwargs={"offload_folder": "./offload_cache"},
             )
         self.template = "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions. USER: {system_prompt}\n{user_prompt} ASSISTANT:"
 
@@ -133,4 +137,4 @@ class VicunaModel(BaseModel):
 MODELS = {
     "Vicuna": VicunaModel,
     "Llama3": LlamaToolUseModel,
-}   
+}

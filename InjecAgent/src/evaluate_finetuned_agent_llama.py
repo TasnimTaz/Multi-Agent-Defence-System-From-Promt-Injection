@@ -13,6 +13,7 @@ import torch
 from transformers import pipeline
 import openai
 import logging
+import gc
 import jinja2
 
 # load template from InjecAgent.src.prompts.jinja.llama_tool_use.jinja
@@ -229,7 +230,20 @@ def evaluate_llama(params):
     predict_one_case = DEFENSE_METHODS[params['defense']]
     
     if params['defense'] == 'FinetunedDetector':
-        pipe = pipeline("text-classification", model="../deberta-v3-base-prompt-injection-v2")
+        # ------------------------------------------------------------------
+        # FIX: explicitly place the classifier pipeline on GPU when one is
+        # available. Without a `device`/`device_map` argument, transformers
+        # silently falls back to CPU even if CUDA is present (this produced
+        # the "Model will be on CPU" warning seen at runtime), which is far
+        # slower for repeated per-case inference than running on GPU
+        # alongside the already-GPU-resident Llama model.
+        # ------------------------------------------------------------------
+        device = 0 if torch.cuda.is_available() else -1
+        pipe = pipeline(
+            "text-classification",
+            model="protectai/deberta-v3-base-prompt-injection-v2",
+            device=device,
+        )
     
     tool_dict = get_tool_dict(gpt_format=True)
     for attack in ['dh', 'ds']:
@@ -274,7 +288,14 @@ def evaluate_llama(params):
     print(f"Scores: {scores}")
     logging.info(f"Scores: {scores}")
 
+    if 'pipe' in dir():
+        del pipe
+    del model_class
+    gc.collect()
+    torch.cuda.empty_cache()
+
 if __name__ == "__main__": 
     params = parse_arguments(agent_type="prompted")
 
     evaluate_llama(params)
+    

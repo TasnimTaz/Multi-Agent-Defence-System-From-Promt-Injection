@@ -15,8 +15,8 @@ import torch.nn.functional as F
 
 class GCGFinetunedDetector():
     def __init__(self, device, threshold=0.8):
-        self.model = AutoModelForSequenceClassification.from_pretrained("../deberta-v3-base-prompt-injection-v2").to(device)
-        self.tokenizer = AutoTokenizer.from_pretrained("../deberta-v3-base-prompt-injection-v2")
+        self.model = AutoModelForSequenceClassification.from_pretrained("protectai/deberta-v3-base-prompt-injection-v2").to(device)
+        self.tokenizer = AutoTokenizer.from_pretrained("protectai/deberta-v3-base-prompt-injection-v2")
         self.device = device
         self.embed_layer = self.model.get_input_embeddings()
         self.vocab_size = self.embed_layer.weight.shape[0]
