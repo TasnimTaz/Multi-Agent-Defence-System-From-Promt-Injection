@@ -1,17 +1,17 @@
-# config.py -এর শুরুতে আপডেট করুন
+# config.py -এর শুরুতে আপডেট করুন (লোকাল Ollama এর জন্য)
 import os
-from groq import Groq
+from openai import OpenAI
 
-# Groq Client ইনিশিয়ালাইজ করুন
-GROQ_CLIENT = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+# লোকাল Ollama-এর জন্য Client ইনিশিয়ালাইজ করুন (base_url এবং dummy api_key সহ)
+GROQ_CLIENT = OpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama"  # Ollama লোকাল সার্ভারের জন্য ডামি কি যথেষ্ট
+)
 
-# ... বাকি কোড একই থাকবে ...
-
-
-TARGET_MODEL = "llama-3.1-8b-instant"
+TARGET_MODEL = "llama3.1"
 
 # Defense / Guard & Coordinator LLM
-DEFENSE_MODEL = "llama-3.1-8b-instant"
+DEFENSE_MODEL = "llama3.1"
 
 SAFE_REFUSAL_MSG = (
     "I'm sorry, I cannot process this request as it appears "
