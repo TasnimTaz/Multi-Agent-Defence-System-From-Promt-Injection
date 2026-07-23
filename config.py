@@ -1,20 +1,17 @@
-# config.py
+# config.py -এর শুরুতে আপডেট করুন
 import os
 from groq import Groq
 
-# app.py-তে অলরেডি কী সেট করা আছে, তাই এখান থেকে সেটা রিড করবে
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+# Groq Client ইনিশিয়ালাইজ করুন
+GROQ_CLIENT = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 
-GROQ_CLIENT = Groq(api_key=GROQ_API_KEY)
+# ... বাকি কোড একই থাকবে ...
 
-# ==========================================
-# MODEL CONFIGURATION (Cross-Model Setup)
-# ==========================================
-# Target / Domain LLM (যেরকম পেপারে Llama2 ছিল, এখানে Llama 3.1)
+
 TARGET_MODEL = "llama-3.1-8b-instant"
 
 # Defense / Guard & Coordinator LLM
-DEFENSE_MODEL = "qwen/qwen3-32b"
+DEFENSE_MODEL = "llama-3.1-8b-instant"
 
 SAFE_REFUSAL_MSG = (
     "I'm sorry, I cannot process this request as it appears "
@@ -144,7 +141,7 @@ MACD_KB = [
                   "simulate a command", "run this command", "execute this command", "command chain",
                   "shell command", "print env", "system info", "id command"]},
     {"id": "KB-EX", "category": "exfiltration",
-     "keywords": ["send this to", "email the", "post this data", "leak", "exfiltrate"]},
+     "keywords": ["send this to", "post this data", "leak", "exfiltrate"]},
     {"id": "KB-DL", "category": "delegation",
      "keywords": ["delegate this", "higher privileges", "another agent", "as admin", "sudo"]},
     {"id": "KB-SG", "category": "signal",
@@ -160,7 +157,24 @@ LOG_PATH = "logs/results.jsonl"
 # comparison এর জন্য)। MACD-v2 তে প্রতিটা agent ইচ্ছাকৃতভাবে ভিন্ন model পায়,
 # যাতে genuinely diverse/uncorrelated detection signal পাওয়া যায় — একই model-কে
 # চারবার জিজ্ঞেস করার বদলে সত্যিকারের ensemble তৈরি হয়।
-MACD_V2_PATTERN_MODEL  = "llama-3.1-8b-instant"              # ছোট, দ্রুত syntax-level check
-MACD_V2_INTENT_MODEL   = "qwen/qwen3-32b"                    # reasoning model, intent বোঝায় ভালো
-MACD_V2_CATEGORY_MODEL = "openai/gpt-oss-120b"               # ভিন্ন training lineage, taxonomy matching
-MACD_V2_JUDGE_MODEL    = "openai/gpt-oss-20b"                # DEFENSE_MODEL থেকে সম্পূর্ণ আলাদা, নিজস্ব সিদ্ধান্তের জন্য
+# config.py এর ভেতর পরিবর্তন করুন:
+
+# Target / Domain LLM
+
+
+# ==========================================
+# MACD-v2: DIVERSE-MODEL ENSEMBLE CONFIG
+# ==========================================
+# config.py এর ভেতর পরিবর্তন করুন:
+
+# Target / Domain LLM
+
+
+# ==========================================
+# MACD-v2: DIVERSE-MODEL ENSEMBLE CONFIG
+# ==========================================
+
+MACD_V2_PATTERN_MODEL  = "llama-3.1-8b-instant"
+MACD_V2_INTENT_MODEL   = "qwen/qwen3-32b"
+MACD_V2_CATEGORY_MODEL = "openai/gpt-oss-120b"
+MACD_V2_JUDGE_MODEL    = "openai/gpt-oss-20b"

@@ -17,6 +17,55 @@ ollama serve        # terminal 1
 python main.py      # terminal 2
 ```
 
+For Groq + Streamlit flow, run:
+```bash
+streamlit run app.py
+```
+
+---
+
+## Exact AdaptiveAttackAgent Evaluation
+
+To evaluate using actual AdaptiveAttackAgent strategy outputs (GCG, MGCG_ST, MGCG_DT, TGCG), do this:
+
+Prerequisites:
+- Install this project's dependencies: `pip install -r requirements.txt`
+- Ensure the Python environment used to run these commands has `groq` installed
+
+1) Clone AdaptiveAttackAgent beside this project:
+```bash
+cd ..
+git clone https://github.com/uiuc-kang-lab/AdaptiveAttackAgent.git AdaptiveAttackAgent_tmp
+```
+
+2) Run strict generation + evaluation from this project root:
+```bash
+python evaluation/run_exact_adaptive_eval.py \
+  --repo-path ../AdaptiveAttackAgent_tmp \
+  --model <path_or_name_used_by_AdaptiveAttackAgent> \
+  --data-setting base_subset \
+  --per-strategy 3
+```
+
+This command:
+- runs all 4 adaptive strategies through AdaptiveAttackAgent
+- loads only generated attack inputs (strict mode)
+- evaluates both Chain and Coordinator pipelines
+- saves JSON and JSONL under logs/
+
+If you already generated attacks before, skip generation:
+```bash
+python evaluation/run_exact_adaptive_eval.py \
+  --repo-path ../AdaptiveAttackAgent_tmp \
+  --model <path_or_name_used_by_AdaptiveAttackAgent> \
+  --skip-generation
+```
+
+Windows PowerShell helper:
+```powershell
+./scripts/run_exact_adaptive_eval.ps1 -Model <path_or_name_used_by_AdaptiveAttackAgent>
+```
+
 ---
 
 ## Project Structure

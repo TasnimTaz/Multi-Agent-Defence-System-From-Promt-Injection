@@ -352,7 +352,8 @@ with st.sidebar:
         "Select Mode",
         ["💬 Interactive",
          "📊 Evaluate — Moderate/Intermediate", "📊 Evaluate — Hard/Advanced",
-         "📊 Evaluate — Extreme/Coordinator-Level", "📊 Evaluate — Full (90 attacks)"],
+         "📊 Evaluate — Extreme/Coordinator-Level", "📊 Evaluate — Full (90 attacks)",
+         "🧬 Evaluate — Adaptive (GCG, 12 attacks)"],
         label_visibility="collapsed",
     )
 
@@ -491,12 +492,23 @@ else:
         "📊 Evaluate — Hard/Advanced":              ("hard_advanced",         ATTACK_DATASET["hard_advanced"]),
         "📊 Evaluate — Extreme/Coordinator-Level":  ("extreme_coordinator",   ATTACK_DATASET["extreme_coordinator"]),
         "📊 Evaluate — Full (90 attacks)":          ("full",                  ALL_ATTACKS),
+        "🧬 Evaluate — Adaptive (GCG, 12 attacks)": ("adaptive_gcg",          ATTACK_DATASET["adaptive_gcg"]),
     }
     suite_name, attacks = suite_map[mode]
     full_count = len(attacks)
 
+    if suite_name == "adaptive_gcg":
+        st.info(
+            "🧬 **Adaptive suite**: এই ১২টা attack input GCG দিয়ে আগে থেকে "
+            "অপ্টিমাইজ করা adversarial suffix (AdaptiveAttackAgent, InjecAgent "
+            "`InstructionalPrevention` baseline-এর বিরুদ্ধে ট্রেইন করা)। এখানে কোনো "
+            "নতুন GCG training হচ্ছে না — শুধু আগে-জেনারেট-করা string-গুলো এই "
+            "সিস্টেমের পাইপলাইনে (Chain/Coordinator/MACD/MACD-v2) replay করে "
+            "ASR মাপা হচ্ছে।"
+        )
+
     st.markdown("**Select attack range to test (start – end index)**")
-    default_end = min(5, full_count)
+    default_end = full_count if suite_name == "adaptive_gcg" else min(5, full_count)
     start_idx, end_idx = st.slider(
         "Attack range",
         min_value=0,
